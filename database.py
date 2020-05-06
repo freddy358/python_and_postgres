@@ -1,18 +1,44 @@
 from psycopg2 import pool
 
-connection_pool = pool.SimpleConnectionPool(1, 10, database='learning', user='postgres', password='35825328', host='localhost')
 
-class ConnectionFromPool:
+class Database:
+    __connection_pool = None
+
+
+    @classmethod
+    def initialise(cls, **kwargs):
+        cls.__connection_pool = pool.SimpleConnectionPool(1, 10, **kwargs)
+    
+    @classmethod
+    def get_connection(cls):
+        return cls.__connection_pool.getconn()
+
+    @classmethod
+    def return_connection(cls, connection):
+        return cls.__connection_pool.putconn(connection)
+
+    @classmethod
+    def close_all_connections(cls):
+        return cls.__connection_pool.closeall()
+
+
+class CursorFromConnectionFromPool:
     def __init__(self):
         self.connection = None
+        self.cursor = None
 
     def __enter__(self):
-        self.connection=connection_pool.getconn()
-        return self.connection
+        self.connection=Database.get_connection()
+        self.cursor=self.connection.cursor()
+        return self.cursor
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.connection.commit() 
-        connection_pool.putconn(self.connection)
+    def __exit__(self, exception_type, exception_value, exception_tb):
+        if exception_value is not None:   # TypeError, AttributeError, ValueError
+            self.connection.rollback()
+        else:
+            self.cursor.close()
+            self.connection.commit()
+        Database.return_connection(self.connection)
 
 
 
